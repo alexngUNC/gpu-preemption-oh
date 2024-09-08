@@ -1,0 +1,18 @@
+{
+    "rtx 3060 ti": {
+        "global_memory_capacity": 8107589632,
+        "concurrent_tb": 76,
+        "tb_size": 768,
+        "sm": 38,
+        "constant": 65536,
+        "shared_memory_per_block": 49152,
+        "registers_per_block": 65536,
+        "threads_per_sm": 1536,
+        "l1_per_sm": 131072,
+        "l1_total": 4980736,
+        "l2": 3145728,
+        "l1_tb_size": 16384,
+        "global_tb_size": 26669702,
+        "max_tb_size": 1024
+    }
+}
