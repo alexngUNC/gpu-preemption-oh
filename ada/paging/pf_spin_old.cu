@@ -14,7 +14,7 @@
 #define MAX_PAGES  100 // TODO: change for jetson orin total 4 KB pages for RTX 3060 Ti
 #define PAGE_SIZE 4096
 
-__global__ void loop_on_gpu(char *page) {
+__global__ void loop_on_gpu(char *page, int *flag) {
 	bool faulted = false;
 	uint64_t start = GlobalTimer64();
 	// TODO: change kernel so it continues for a bit after the page fault
@@ -26,6 +26,8 @@ __global__ void loop_on_gpu(char *page) {
 			faulted = true;
 		}
 	}
+	// flag for synchronization
+	*flag = 0;
 }
 
 int main(int argc, char **argv) {
@@ -59,13 +61,13 @@ int main(int argc, char **argv) {
 	SAFE_D(cuDeviceGet(&device, 0));
 
 	// flag for synchronization
-	//int *flag;
-	//SAFE(cudaHostAlloc(&flag, sizeof(int), cudaHostAllocMapped));
+	int *flag;
+	SAFE(cudaHostAlloc(&flag, sizeof(int), cudaHostAllocMapped));
 
 	// Run iterations on a single thread
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 	for (size_t i=0; i<num_iters; i++) {
-		//*flag = 1;
+		*flag = 1;
 		// Make sure it is resident in host memory so it triggers a page fault
 		SAFE_D(cuMemAdvise(d_pages + i * PAGE_SIZE, PAGE_SIZE, CU_MEM_ADVISE_SET_PREFERRED_LOCATION, CU_DEVICE_CPU));
 		*(((char *) d_pages) + i * PAGE_SIZE) =  1;
@@ -75,8 +77,12 @@ int main(int argc, char **argv) {
 
 		// launch page fault kernel
 		//printf("Iteration %lu: Before GPU dereference\n", i);
-		loop_on_gpu<<<1,1>>>((char *) d_pages + i * PAGE_SIZE);
+		loop_on_gpu<<<1,1>>>((char *) d_pages + i * PAGE_SIZE, flag);
 		//printf("Iteration %lu: After GPU dereference\n", i);
+
+		// busy wait until kernel finishes
+		while (*flag) {}
+		//SAFE(cudaDeviceSynchronize());
 
 	}
 	//SAFE(cudaDeviceSynchronize());

@@ -1,0 +1,1 @@
+sudo nsys profile --gpuctxsw=true bin/pf_spin 10

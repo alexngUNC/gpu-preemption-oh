@@ -2,7 +2,7 @@
 .PHONY: all clean
 
 DRIVER = -lcuda
-FLAGS = -gencode arch=compute_87,code=sm_87
+FLAGS = -gencode arch=compute_89,code=sm_89
 NVCC = /usr/local/cuda-12.6/bin/nvcc
 
 all: pf_spin
