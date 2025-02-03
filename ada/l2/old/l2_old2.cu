@@ -2,23 +2,24 @@
 #include <time.h>
 #include "testbench.h"
 
-#define BLOCKS_PER_SM 1
+#define BLOCKS_PER_SM 3
+#define ELTS_PER_THREAD 270
 #define L1_SIZE 131072
-#define STRIDE 32
-#define TB_SIZE 1024
-#define TOTAL_BUFFER_LENGTH 131072
+#define TB_SIZE 512
 
-#define DEBUG 1
+//#define DEBUG 1
 
-__global__ void vecStore(int *a, size_t total_buffer_length) {
-	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
-	size_t start_index = portion_each_thread_covers * threadIdx.x;
-	size_t end_index = start_index + portion_each_thread_covers;
-#ifndef DEBUG
-	while (1)
+__global__ void vecInc(int *a, int n) {
+	int idx = (blockIdx.x * blockDim.x + threadIdx.x) * ELTS_PER_THREAD;
+
+#ifdef DEBUG
+	for (int i=0; i<ELTS_PER_THREAD; i++)
+		a[idx + i] = idx;
+#else
+	for (int i=0; 1; i=(i+1) % ELTS_PER_THREAD)
+		a[idx + i] = idx;
 #endif
-		for (size_t i = start_index; i < end_index; i += STRIDE)
-			a[i] = i;
+
 }
 
 int main() {
@@ -49,22 +50,15 @@ int main() {
 	SAFE(cudaDeviceGetLimit(&persistingL2CacheSize, cudaLimitPersistingL2CacheSize));
 	printf(" New persisting L2 cache size: %zu bytes\n", persistingL2CacheSize);
 
-	// Set shared carveout to 0
-	printf(" Setting shared memory carveout to 0\n");
-	SAFE(cudaFuncSetAttribute(vecStore, cudaFuncAttributePreferredSharedMemoryCarveout, 0));
-
 	// array size
-	int n = TOTAL_BUFFER_LENGTH;
+	int n = total_threads * ELTS_PER_THREAD;
 	int bytes = n * sizeof(int);
-	float l1_ratio = ((float)(bytes)) / ((float)(L1_SIZE));
-	float l2_ratio = ((float)(bytes)) / ((float)(l2Size));
-	float cache_total_ratio = ((float)(bytes)) / ((float)(cache_total));
-	printf("----- Allocating int array of length %d -----\n", n);
+	float overflow_ratio = ((float)(bytes)) / ((float)(cache_total));
+	printf("-----Allocating int array of length %d -----\n", n);
 	printf(" Array is %d bytes\n", bytes);
 	printf(" Launching %d threads\n", total_threads);
-	printf(" Array is %f times the total amount of memory stored in the L1 cache\n", l1_ratio);
-	printf(" Array is %f times the total amount of memory stored in the L2 cache\n", l2_ratio);
-	printf(" Array is %f times the total amount of memory stored in the L1 and L2 caches\n", cache_total_ratio);
+	printf(" Each thread will access %d elements\n", ELTS_PER_THREAD);
+	printf(" Array is %f times the total amount of memory stored in the L1 and L2 caches\n", overflow_ratio);
 
 
 	// seed the random number generator
@@ -80,10 +74,9 @@ int main() {
 	// device memory
 	int *d_a;
 	if (bytes < cache_total) {
-		//printf("Not allocating enough memory to saturate all caches. Exiting...\n");
-		//free(h_a);
-		//return 1;
-		printf("Warning: not allocating enough memory to saturate L2 & all L1 caches\n");
+		printf("Not allocating enough memory to saturate all caches. Exiting...\n");
+		free(h_a);
+		return 1;
 	}
 	printf(" Allocating %d bytes on GPU\n", bytes);
 	SAFE(cudaMalloc(&d_a, bytes));
@@ -98,7 +91,7 @@ int main() {
 	cudaEventRecord(start);
 
 	// launch kernel
-	vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n);
+	vecInc<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n);
 	SAFE(cudaDeviceSynchronize());
 	
 	// Record the stop event

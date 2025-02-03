@@ -3,23 +3,38 @@
 #include "testbench.h"
 
 #define BLOCKS_PER_SM 1
+#define ELTS_PER_THREAD 1024
 #define L1_SIZE 131072
 #define STRIDE 32
 #define TB_SIZE 1024
-#define TOTAL_BUFFER_LENGTH 131072
 
 #define DEBUG 1
 
-__global__ void vecStore(int *a, size_t total_buffer_length) {
-	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
+__global__ void new_vecStore(int *a, size_t total_buf_size) {
+	size_t portion_each_thread_covers = total_buf_size / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
 	size_t end_index = start_index + portion_each_thread_covers;
 #ifndef DEBUG
 	while (1)
 #endif
-		for (size_t i = start_index; i < end_index; i += STRIDE)
+		for (size_t i = start_index i < end_index; i += STRIDE)
 			a[i] = i;
 }
+
+/*
+__global__ void vecStore(int *a) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+#ifdef DEBUG
+	for (int i=0; i<ELTS_PER_THREAD; i++)
+		a[idx + i * STRIDE] = idx + i * STRIDE;
+#else
+	for (int i=0; i<ELTS_PER_THREAD; i=(i + 1) % ELTS_PER_THREAD)
+		a[idx + i * STRIDE] = idx + i * STRIDE;
+#endif
+
+}
+*/
 
 int main() {
 
@@ -54,17 +69,15 @@ int main() {
 	SAFE(cudaFuncSetAttribute(vecStore, cudaFuncAttributePreferredSharedMemoryCarveout, 0));
 
 	// array size
-	int n = TOTAL_BUFFER_LENGTH;
+	//int n = total_threads * ELTS_PER_THREAD;
+	int n = STRIDE * ELTS_PER_THREAD * total_threads;
 	int bytes = n * sizeof(int);
-	float l1_ratio = ((float)(bytes)) / ((float)(L1_SIZE));
-	float l2_ratio = ((float)(bytes)) / ((float)(l2Size));
-	float cache_total_ratio = ((float)(bytes)) / ((float)(cache_total));
+	float overflow_ratio = ((float)(bytes)) / ((float)(cache_total));
 	printf("----- Allocating int array of length %d -----\n", n);
 	printf(" Array is %d bytes\n", bytes);
 	printf(" Launching %d threads\n", total_threads);
-	printf(" Array is %f times the total amount of memory stored in the L1 cache\n", l1_ratio);
-	printf(" Array is %f times the total amount of memory stored in the L2 cache\n", l2_ratio);
-	printf(" Array is %f times the total amount of memory stored in the L1 and L2 caches\n", cache_total_ratio);
+	printf(" Each thread will access %d elements\n", ELTS_PER_THREAD);
+	printf(" Array is %f times the total amount of memory stored in the L1 and L2 caches\n", overflow_ratio);
 
 
 	// seed the random number generator
@@ -98,7 +111,8 @@ int main() {
 	cudaEventRecord(start);
 
 	// launch kernel
-	vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n);
+	//vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a);
+	new_vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a);
 	SAFE(cudaDeviceSynchronize());
 	
 	// Record the stop event

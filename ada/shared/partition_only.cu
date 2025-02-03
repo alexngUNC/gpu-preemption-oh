@@ -2,7 +2,7 @@
 #include "testbench.h"
 
 #define BLOCKS_PER_SM 1
-#define SHARED_PCT 75.0
+#define SHARED_PCT 0.0
 #define SM 142
 
 __global__ void fillShared(int *blockCounter, int *flag) {
@@ -23,7 +23,7 @@ __global__ void fillShared(int *blockCounter, int *flag) {
 	}
 
 	// spin with desired shared memory usage
-	while (0) { }
+	while (1) { }
 }
 
 int main() {

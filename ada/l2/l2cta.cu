@@ -1,24 +1,21 @@
+#include <cuda.h>
 #include <stdio.h>
 #include <time.h>
 #include "testbench.h"
 
 #define BLOCKS_PER_SM 1
 #define L1_SIZE 131072
+#define NUM_BLOCKS 1
 #define STRIDE 32
 #define TB_SIZE 1024
 #define TOTAL_BUFFER_LENGTH 131072
-
-#define DEBUG 1
 
 __global__ void vecStore(int *a, size_t total_buffer_length) {
 	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
 	size_t end_index = start_index + portion_each_thread_covers;
-#ifndef DEBUG
-	while (1)
-#endif
-		for (size_t i = start_index; i < end_index; i += STRIDE)
-			a[i] = i;
+	for (size_t i = start_index; i < end_index; i += STRIDE)
+		a[i] = i;
 }
 
 int main() {
@@ -68,7 +65,7 @@ int main() {
 
 
 	// seed the random number generator
-    	srand(time(NULL));
+	srand(time(NULL));
 
 	// host memory
 	int *h_a;
@@ -94,11 +91,24 @@ int main() {
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 
+	// Create a context so benchmark is not the last thing to run
+	CUdevice device;
+	SAFE_D(cuDeviceGet(&device, 0));
+	CUcontext dummy_ctx;
+	SAFE_D(cuCtxCreate(&dummy_ctx, 0, device));
+	SAFE_D(cuCtxDestroy(dummy_ctx));
+
+	// Wait for keyboard input so preemption mode can be changed
+	printf("Press enter to continue\n");
+	fgetc(stdin);
+	printf("Launching kernel...\n");
+
 	// Record the start event
 	cudaEventRecord(start);
 
 	// launch kernel
 	vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n);
+	printf("GPU is spinning!\n");
 	SAFE(cudaDeviceSynchronize());
 	
 	// Record the stop event

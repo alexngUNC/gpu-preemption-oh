@@ -13,7 +13,8 @@ __constant__ int constantData[LENGTH];
    e.g. loop update condition is i = (i+1)%LENGTH, and remove continuation condition
 3. May want to do something to mitigate/reduce global loads
    e.g make the buffer no larger than the constant cache size
-     Could keep shrinking the buffer until profiler shows few/no global loads in the steady-state
+     Could keep shrinking the buffer until profiler shows few/no global loads in the steady-state:q
+
 */
 
 __global__ void readConstant(int *result, int *flag) {

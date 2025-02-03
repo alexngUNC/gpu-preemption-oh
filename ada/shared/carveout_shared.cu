@@ -3,7 +3,7 @@
 
 #define BLOCKS_PER_SM 1
 #define NUMBER 8
-#define SHARED_PCT 100.0
+#define SHARED_PCT 0.0
 #define SHARED_MEM_TB (int) (101376.0 * (SHARED_PCT / 100.0))
 #define ELEMENTS SHARED_MEM_TB / 4
 #define SM 142
@@ -61,7 +61,7 @@ int main() {
 	SAFE(cudaFuncSetAttribute(fillShared, cudaFuncAttributeMaxDynamicSharedMemorySize, SHARED_MEM_TB));
 
 	// Adjust shared partition to match usage
-	SAFE(cudaFuncSetAttribute(fillShared, cudaFuncAttributePreferredSharedMemoryCarveout, 100));
+	SAFE(cudaFuncSetAttribute(fillShared, cudaFuncAttributePreferredSharedMemoryCarveout, 0));
 
 	// Confirm shared carevout
 	cudaFuncAttributes attr;
