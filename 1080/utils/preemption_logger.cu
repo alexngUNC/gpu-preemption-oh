@@ -28,7 +28,8 @@ struct interval {
 
 // Minimum time discontinuity which indicates a gap between intervals
 // Clock resolution is about 1ns, but it only ticks every 1us pre-H100
-#define MIN_PREEMPT_TICKS 2*1000 // ~20us
+//#define MIN_PREEMPT_TICKS 2*1000 // ~2us
+#define MIN_PREEMPT_TICKS 4*1000 // ~4us
 
 // Watch for discontinuities in the GPU clock, indicating intervals during
 // which we we were preempted and another context ran.

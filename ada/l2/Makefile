@@ -8,9 +8,11 @@ L2 = -Xptxas -dlcm=cg
 WB = -Xptxas -dscm=wb
 WT = -Xptxas -dscm=wt
 
-NVCC = /usr/local/cuda-12.6/bin/nvcc
+NVCC = /home/jbakita/sabrenet-1tb/usr/local/cuda-12.6/bin/nvcc
 
 all: l1wb l1wt l2cg l2wb l2wt l1ctawb l1ctawt l2ctacg l2ctawb l2ctawt
+cilp: l1wb l1wt l2cg l2wb l2wt
+cta: l1ctawb l1ctawt l2ctacg l2ctawb l2ctawt
 
 l1wb: l2.cu testbench.h
 	$(NVCC) $(FLAGS) $(L1) $(WB) l2.cu -o bin/l1wb

@@ -35,7 +35,6 @@ static __thread unsigned int __SAFE_err;
 
 #define s2ns(s) ((s)*1000l*1000l*1000l)
 #define ns2ms(s) ((s)/(1000l*1000l))
-#define ns2us(s) ((s)/(1000l))
 
 // Return the difference between two timestamps in nanoseconds
 #define timediff(start, end) ((s2ns((end).tv_sec) + (end).tv_nsec) - (s2ns((start).tv_sec) + (start).tv_nsec))

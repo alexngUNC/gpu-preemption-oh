@@ -126,7 +126,6 @@ static void FreeSharedBuffer(void *buffer, size_t size) {
 
 // This function should be run in a separate process in order to read the GPU's
 // nanosecond counter. Sets times to 0 on error.
-// TODO: Rewrite this to use uint64_t for CPU time. A double is less precise.
 static void InternalReadGPUNanoseconds(int cuda_device, double *cpu_time,
     uint64_t *gpu_time) {
   uint64_t *device_time = NULL;

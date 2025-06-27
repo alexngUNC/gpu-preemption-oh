@@ -18,7 +18,7 @@ __global__ void vecStore(int *a, size_t total_buffer_length) {
 	while (1)
 #endif
 		for (size_t i = start_index; i < end_index; i += STRIDE)
-			a[i] = i;
+			a[i] += i;
 }
 
 int main() {

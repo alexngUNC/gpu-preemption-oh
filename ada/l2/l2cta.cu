@@ -4,18 +4,35 @@
 #include "testbench.h"
 
 #define BLOCKS_PER_SM 1
+#define ITERATIONS 200
 #define L1_SIZE 131072
 #define NUM_BLOCKS 1
 #define STRIDE 32
 #define TB_SIZE 1024
 #define TOTAL_BUFFER_LENGTH 131072
 
+#define DEBUG 1
+
 __global__ void vecStore(int *a, size_t total_buffer_length) {
 	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
 	size_t end_index = start_index + portion_each_thread_covers;
-	for (size_t i = start_index; i < end_index; i += STRIDE)
-		a[i] = i;
+	for (int i=0; i<ITERATIONS; i++) {
+		for (size_t i = start_index; i < end_index; i += STRIDE) {
+			a[i] += i;
+		}
+	}
+}
+
+__global__ void vecStore2(int *a, size_t total_buffer_length) {
+	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
+	size_t start_index = portion_each_thread_covers * threadIdx.x;
+	size_t end_index = start_index + portion_each_thread_covers;
+	for (int i=0; i<ITERATIONS; i++) {
+		for (size_t i = start_index; i < end_index; i += STRIDE) {
+			a[i] += i;
+		}
+	}
 }
 
 int main() {
@@ -76,15 +93,18 @@ int main() {
 
 	// device memory
 	int *d_a;
+	int *d_a2;
 	if (bytes < cache_total) {
 		//printf("Not allocating enough memory to saturate all caches. Exiting...\n");
 		//free(h_a);
 		//return 1;
 		printf("Warning: not allocating enough memory to saturate L2 & all L1 caches\n");
 	}
-	printf(" Allocating %d bytes on GPU\n", bytes);
+	printf(" Allocating %d bytes on GPU\n", bytes*2);
 	SAFE(cudaMalloc(&d_a, bytes));
+	SAFE(cudaMalloc(&d_a2, bytes));
 	SAFE(cudaMemcpy(d_a, h_a, bytes, cudaMemcpyHostToDevice));
+	SAFE(cudaMemcpy(d_a2, h_a, bytes, cudaMemcpyHostToDevice));
 
 	// Create CUDA events for timing
 	cudaEvent_t start, stop;
@@ -104,19 +124,24 @@ int main() {
 	printf("Launching kernel...\n");
 
 	// Record the start event
+#ifdef DEBUG
 	cudaEventRecord(start);
+#endif
 
 	// launch kernel
 	vecStore<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n);
+	vecStore2<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a2, n);
 	printf("GPU is spinning!\n");
 	SAFE(cudaDeviceSynchronize());
 	
 	// Record the stop event
+#ifdef DEBUG
 	cudaEventRecord(stop);
 	
 	// Wait for the stop event to complete
 	cudaEventSynchronize(stop);
-	
+#endif
+
 	// Calculate the elapsed time
 	float milliseconds = 0;
 	cudaEventElapsedTime(&milliseconds, start, stop);

@@ -16,30 +16,32 @@
 
 #define MIN_PREEMPT_TICKS 20*1000 // 20us
 
-//#define DEBUG 1
+#define DEBUG 1
 
-
+// Warning: kernel doesn't exit, only counts half of specified preemptions
+//  - Half of the preemptions occur when spinning, last half occur during load/store instructions
 __global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions) {
 	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
-	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	//int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	size_t end_index = start_index + portion_each_thread_covers;
 	int preempt_count = 0;
+	int half_preempts = num_preemptions / 2;
+	uint64_t last_time = 0;
+	uint64_t now = 0;
 #ifndef DEBUG
-	while (preempt_count < num_preemptions) {
+	while (preempt_count < half_preempts) {
 #endif
-		if (tid == 0) {
-			// saturate cache
-			for (size_t i = start_index; i < end_index; i += STRIDE) {
-				a[i] += i;
-			}
+		// saturate cache
+		for (size_t i = start_index; i < end_index; i += STRIDE) {
+			a[i] += i;
 		}
 
 #ifndef DEBUG
 		// spin until preempted
-		uint64_t last_time = GlobalTimer64();
+		last_time = GlobalTimer64();
 		while (1) {
-			uint64_t now = GlobalTimer64();
+			now = GlobalTimer64();
 			if (now > last_time + MIN_PREEMPT_TICKS) {
 				preempt_count += 1;
 				break;
@@ -47,14 +49,22 @@ __global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions)
 			last_time = now;
 		}
 	}
+	while (1) {
+#endif
+		// keep loading and storing, even during preemption
+		for (size_t i=start_index; i<end_index; i+=STRIDE) {
+			a[i] += i;
+		}
+#ifndef DEBUG
+	}
 #endif
 }
 
 
 static const char* usage_msg = "\
 Usage: %s NUM_PREEMPTIONS\n\
-Saturate L1 caches -> spin until preempted -> repeat.\n\
-  NUM_PREEMPTIONS GPU kernel repeats until this many preemptions have occurred.\n";
+Saturate L1 caches -> spin until preempted for half -> preempt while loading/storing for last half.\n\
+  NUM_PREEMPTIONS GPU kernel spins on half of this many preemptions have occurred; infinite loop of LD/ST on last half\n";
 
 int main(int argc, char **argv) {
 	if (argc != 2) {

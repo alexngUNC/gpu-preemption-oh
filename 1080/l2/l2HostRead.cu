@@ -1,3 +1,4 @@
+#include <cooperative_groups.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -9,30 +10,25 @@
 #define L1_SIZE 49152
 #define STRIDE 32
 #define TB_SIZE 1024
-// saturate 4 times: 49152
-// L1: 12288
-// 1 read: 1024
-#define TOTAL_BUFFER_LENGTH 6291456
+#define TOTAL_BUFFER_LENGTH 49152
 
 #define MIN_PREEMPT_TICKS 20*1000 // 20us
 
 //#define DEBUG 1
 
 
-__global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions) {
+__global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions, int *dummy_dest) {
 	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
-	int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	size_t end_index = start_index + portion_each_thread_covers;
 	int preempt_count = 0;
+	int dummy_counter = 0;
 #ifndef DEBUG
 	while (preempt_count < num_preemptions) {
 #endif
-		if (tid == 0) {
-			// saturate cache
-			for (size_t i = start_index; i < end_index; i += STRIDE) {
-				a[i] += i;
-			}
+		// saturate cache
+		for (size_t i = start_index; i < end_index; i += STRIDE) {
+			dummy_counter += a[i];
 		}
 
 #ifndef DEBUG
@@ -48,6 +44,7 @@ __global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions)
 		}
 	}
 #endif
+	atomicAdd(dummy_dest, dummy_counter);
 }
 
 
@@ -95,7 +92,7 @@ int main(int argc, char **argv) {
 	float cache_total_ratio = ((float)(bytes)) / ((float)(cache_total));
 	printf("----- Allocating int array of length %zu -----\n", n);
 	printf(" Array is %d bytes\n", bytes);
-	printf(" Launching %d blocks with %d threads in each\n", sm_count * BLOCKS_PER_SM, TB_SIZE);
+    printf(" Launching %d blocks with %d threads in each\n", sm_count * BLOCKS_PER_SM, TB_SIZE);
 	printf(" Launching %d total threads\n", total_threads);
 	printf(" Array is %f times the total amount of memory stored in the L1 cache\n", l1_ratio);
 	printf(" Array is %f times the total amount of memory stored in the L2 cache\n", l2_ratio);
@@ -103,12 +100,8 @@ int main(int argc, char **argv) {
 
 	// host memory
 	int *h_a;
-	printf(" Allocating %d bytes on GPU\n", bytes);
-	h_a = (int *) malloc(bytes);
-	if (h_a == NULL) {
-		fprintf(stderr, "Could not allocate host memory\n");
-		return 1;
-	}
+	printf(" Allocating %d bytes on CPU with host alloc\n", bytes);
+	SAFE(cudaHostAlloc(&h_a, bytes, cudaHostAllocMapped));
 	if (bytes < cache_total) {
 		//printf("Not allocating enough memory to saturate all caches. Exiting...\n");
 		//free(h_a);
@@ -120,10 +113,6 @@ int main(int argc, char **argv) {
 	for (int i=0; i<n; i++) {
 		h_a[i] = rand();
 	}
-	// device memory
-	int *d_a;
-	SAFE(cudaMalloc(&d_a, bytes));
-	SAFE(cudaMemcpy(d_a, h_a, bytes, cudaMemcpyHostToDevice));
 
 	// Create CUDA events for timing
 	cudaEvent_t start, stop;
@@ -140,6 +129,14 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	// dummy counter destination
+	int *h_dummy_counter;
+	SAFE(cudaHostAlloc(&h_dummy_counter, sizeof(int), cudaHostAllocMapped));
+	*h_dummy_counter = 0;
+
+	//dim3 dimGrid(sm_count * BLOCKS_PER_SM, 1, 1);
+	//dim3 dimBlock(numThreads, 1, 1);
+	//void *kernelArgs[] = { &d_a, &n, &num_preemptions };
 	// wait for keyboard input to start
 	printf("Press any key to continue.\n");
 	fgetc(stdin);
@@ -147,9 +144,11 @@ int main(int argc, char **argv) {
 	// Record the start event
 	cudaEventRecord(start);
 	// launch kernel
-	vecRead<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(d_a, n, num_preemptions);
+	vecRead<<<sm_count * BLOCKS_PER_SM, TB_SIZE>>>(h_a, n, num_preemptions, h_dummy_counter);
+	//SAFE(cudaLaunchCooperativeKernel((void *) vecIncrement, dimGrid, dimBlock, kernelArgs, 0, 0)); 
 	printf("Kernel launched!\n");
 	SAFE(cudaDeviceSynchronize());
+	
 	// Record the stop event
 	cudaEventRecord(stop);
 	
@@ -178,7 +177,10 @@ int main(int argc, char **argv) {
 	}
 	printf("\n");
 
+	// dummy counter
+	printf("Dummy counter: %d\n", *h_dummy_counter);
+
 	// free memory
-	SAFE(cudaFree(d_a));
+	SAFE(cudaFreeHost(h_a));
 	return 0;
 }

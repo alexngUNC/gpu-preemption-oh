@@ -8,8 +8,8 @@
 
 #include "testbench.h"
 
-__global__ void loop_on_gpu(unsigned long iters, int *__unused) {
-	for (volatile int i = 0; i < iters; i++) (*__unused)++;
+__global__ void loop_on_gpu(uint64_t iters, int *__unused) {
+	for (volatile uint32_t i = 0; i < iters; i++) (*__unused)++;
 }
 
 int main(int argc, char **argv) {
@@ -23,11 +23,14 @@ int main(int argc, char **argv) {
 	}
 
 	// Input is multiplied by one million, unless infinite
-	unsigned long num_iters = strtoul(argv[1], NULL, 10);
-	if (num_iters != (unsigned long)(-1))
+	uint64_t num_iters = strtoull(argv[1], NULL, 10);
+	if (num_iters != (uint64_t)(-1))
 		num_iters *= 1000 * 1000;
 
 	// Initialize CUDA and a context (hack)
+	CUcontext ctx;
+	SAFE_D(cuInit(0));
+	SAFE_D(cuCtxCreate(&ctx, 0, 0));
 	SAFE(cudaMalloc(&__unused, 8));
 
 	// Run iterations on a single thread
@@ -51,5 +54,8 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "CRITICAL: Zero iterations seem completed. Likely incorrect "
 		        "arguments, internal error, or corruption of CUDA internal state.\n");
 
+	fprintf(stderr, "Beginning DESTROYYYYYYY!!!!\n");
+	SAFE_D(cuCtxDestroy(ctx));
+	fprintf(stderr, "Finished destroy.\n");
 	return 0;
 }

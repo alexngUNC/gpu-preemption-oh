@@ -1,5 +1,12 @@
+1080/data
+1080/l2/bin
 ada/constant/bin/
 ada/data
 ada/paging/bin
 ada/shared/bin/
+ada/registers/bin
 ada/utils/bin
+ada/utils/gpu-microbench
+ada/utils/constant_cycles_kernel
+ada/l2/bin
+nvdump

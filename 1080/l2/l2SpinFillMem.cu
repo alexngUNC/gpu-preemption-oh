@@ -18,28 +18,23 @@
 
 //#define DEBUG 1
 
-
+// Warning: kernel doesn't exit: it spins infinitely on the last LD/ST preemptions
 __global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions) {
 	size_t portion_each_thread_covers = total_buffer_length / blockDim.x;
 	size_t start_index = portion_each_thread_covers * threadIdx.x;
-	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	//int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	size_t end_index = start_index + portion_each_thread_covers;
 	int preempt_count = 0;
+	int one_third = num_preemptions / 3;
+	int two_thirds = one_third * 2;
+	uint64_t last_time = 0;
+	uint64_t now = 0;
 #ifndef DEBUG
-	while (preempt_count < num_preemptions) {
-#endif
-		if (tid == 0) {
-			// saturate cache
-			for (size_t i = start_index; i < end_index; i += STRIDE) {
-				a[i] += i;
-			}
-		}
-
-#ifndef DEBUG
+	while (preempt_count < one_third) {
 		// spin until preempted
-		uint64_t last_time = GlobalTimer64();
+		last_time = GlobalTimer64();
 		while (1) {
-			uint64_t now = GlobalTimer64();
+			now = GlobalTimer64();
 			if (now > last_time + MIN_PREEMPT_TICKS) {
 				preempt_count += 1;
 				break;
@@ -47,14 +42,41 @@ __global__ void vecRead(int *a, size_t total_buffer_length, int num_preemptions)
 			last_time = now;
 		}
 	}
+	while (preempt_count < two_thirds) {
+#endif
+		// saturate cache
+		for (size_t i = start_index; i < end_index; i += STRIDE) {
+			a[i] += i;
+		}
+
+#ifndef DEBUG
+		// spin until preempted
+		last_time = GlobalTimer64();
+		while (1) {
+			now = GlobalTimer64();
+			if (now > last_time + MIN_PREEMPT_TICKS) {
+				preempt_count += 1;
+				break;
+			}
+			last_time = now;
+		}
+	}
+	while (1) {
+#endif
+		// keep loading and storing, even during preemption
+		for (size_t i=start_index; i<end_index; i+=STRIDE) {
+			a[i] += i;
+		}
+#ifndef DEBUG
+	}
 #endif
 }
 
 
 static const char* usage_msg = "\
 Usage: %s NUM_PREEMPTIONS\n\
-Saturate L1 caches -> spin until preempted -> repeat.\n\
-  NUM_PREEMPTIONS GPU kernel repeats until this many preemptions have occurred.\n";
+Saturate L1 caches -> spin until preempted for 1/3 -> fill cache then spin -> preempt while loading/storing for last half.\n\
+  NUM_PREEMPTIONS GPU kernel is intended to be monitored for tthis many preemptions; infinite loop of LD/ST on last third\n";
 
 int main(int argc, char **argv) {
 	if (argc != 2) {

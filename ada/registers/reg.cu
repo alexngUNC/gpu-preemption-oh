@@ -2,19 +2,17 @@
 #include "testbench.h"
 
 #define BLOCKS_PER_SM 6
-#define LENGTH 1
+#define LENGTH 85
 #define TB_SIZE 256
 
 template <typename T>
 __global__ void kernel(T *data, bool loop) {
 	T sdata[LENGTH];
-	while (1) {
-		for (int i = 0; i < LENGTH; i++) {
-			sdata[i] = data[i];
-		}
-		for (int i=0; i<LENGTH; i++) {
-    			if (loop) printf("sdata[%d] = %d\n", i, sdata[i]);
-		}
+	for (int i = 0; i < LENGTH; i++) {
+		sdata[i] = data[i];
+	}
+	for (int i=0; i<LENGTH; i++) {
+		if (loop) printf("sdata[%d] = %d\n", i, sdata[i]);
 	}
 }
 
@@ -51,5 +49,5 @@ int main() {
 
 	// Output the elapsed time
 	printf("----- Elapsed time: %f ms -----\n", milliseconds);
-  	return 0;
+	return 0;
 }
